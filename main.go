@@ -15,7 +15,7 @@ import (
 // backend is a reverseProxy peer from ORIGIN_URL to URL
 type backend struct {
 	URL          *url.URL
-	IsAlive      bool
+	Alive        bool
 	m            sync.Mutex
 	ReverseProxy *httputil.ReverseProxy // reverse proxy used to serve the http through
 }
@@ -33,11 +33,38 @@ func (s *serverPool) NextIndex() int {
 	return int(atomic.AddUint64(&s.current, uint64(1)) % uint64(len(s.backends)))
 }
 
+func (b *backend) SetAlive(alive bool) {
+	b.m.Lock()
+	defer b.m.Unlock()
+	b.Alive = alive
+}
+
+func (b *backend) IsAlive() bool {
+	b.m.Lock()
+	defer b.m.Unlock()
+	return b.Alive
+}
+
 func (s *serverPool) FindBackend() (*backend, error) {
 	if len(s.backends) == 0 {
 		return nil, errors.New("no backend available")
 	}
-	return s.backends[0], nil
+	return s.FindRoundRobin()
+}
+
+func (s *serverPool) FindRoundRobin() (*backend, error) {
+	next := s.NextIndex()
+	l := len(s.backends) + next
+	for i := next; i < l; i++ {
+		idx := i % len(s.backends)
+		if s.backends[idx].IsAlive() {
+			if i != next {
+				atomic.StoreUint64(&s.current, uint64(idx))
+			}
+			return s.backends[idx], nil
+		}
+	}
+	return nil, errors.New("round roubin failed to get a valid backend")
 }
 
 // loadbalance
@@ -62,11 +89,9 @@ func main() {
 
 	backend := backend{
 		URL:          u,
-		IsAlive:      true,
+		Alive:        true,
 		ReverseProxy: proxy,
 	}
-
-	fmt.Println(&backend)
 
 	serverPool.AddBackend(&backend)
 
