@@ -80,23 +80,30 @@ func (s *serverPool) Loadbalance(w http.ResponseWriter, r *http.Request) {
 func main() {
 	var serverPool serverPool
 
-	u, err := url.Parse("http://localhost:8080")
-	if err != nil {
-		log.Fatal(err)
+	serverURLs := [1]string{
+		":8080",
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(u)
+	for _, serverURL := range serverURLs {
+		u, err := url.Parse("http://localhost" + serverURL)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	backend := backend{
-		URL:          u,
-		Alive:        true,
-		ReverseProxy: proxy,
+		proxy := httputil.NewSingleHostReverseProxy(u)
+
+		backend := backend{
+			URL:          u,
+			Alive:        true,
+			ReverseProxy: proxy,
+		}
+
+		serverPool.AddBackend(&backend)
+
+		// run all backends
+		go runBackend(serverURL)
+
 	}
-
-	serverPool.AddBackend(&backend)
-
-	// run all backends
-	go runBackend(":8080")
 
 	// run lb server
 	server := http.Server{
