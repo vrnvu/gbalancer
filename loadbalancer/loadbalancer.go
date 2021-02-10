@@ -2,11 +2,14 @@ package loadbalancer
 
 import (
 	"errors"
+	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Backend is a reverseProxy peer from ORIGIN_URL to URL
@@ -48,6 +51,46 @@ func (b *Backend) isAlive() bool {
 	b.m.Lock()
 	defer b.m.Unlock()
 	return b.Alive
+}
+
+// checkHealth returns the state of a backend
+// for now it returns true or false according if its up or down
+// todo chechHealth return a enum with DOWN, UP, BAD
+// so we can implement smarter algorithms for balancing
+func (b *Backend) checkHealth(timeoutSeconds int) bool {
+	timeout := time.Duration(timeoutSeconds) * time.Second
+	conn, err := net.DialTimeout("tcp", b.URL.Host, timeout)
+	if err != nil {
+		log.Println("can not establish a connection with backend " + b.URL.Host)
+		return false
+	}
+	if conn.Close(); err != nil {
+		log.Println("error closing tcp connection with backend " + b.URL.Host)
+	}
+	return true
+}
+
+// HealthCheck routine pings the backends pool every interval and updates backends
+func (s *ServerPool) HealthCheck(seconds, timeout int) {
+	t := time.NewTicker(time.Duration(seconds) * time.Second)
+	for {
+		select {
+		case <-t.C:
+			for _, b := range s.Backends {
+				// todo chechHealth return a enum with DOWN, UP, BAD
+				status := b.checkHealth(timeout)
+				switch status {
+				case true:
+					b.enable()
+					log.Printf("HealthCheck %s [%t]\n", b.URL, status)
+				case false:
+					b.disable()
+					log.Printf("HealthCheck %s [%t]\n", b.URL, status)
+				}
+			}
+
+		}
+	}
 }
 
 // FindBackend attempts to find a valid backend from the list of peers

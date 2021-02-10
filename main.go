@@ -63,6 +63,14 @@ func main() {
 		Handler: http.HandlerFunc(serverPool.Loadbalance),
 	}
 
+	// To check the health of a backend we make a tcp connection with a timeout of 2
+	// In order to iterate all backends in the worst case scenario
+	// we will need an interval bigger than timeout * numberOfBackends
+	// Se we "naively" add one second
+	timeout := 2
+	interval := numberOfBackends*timeout + 1
+	go serverPool.HealthCheck(interval, timeout)
+
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
