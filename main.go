@@ -27,7 +27,7 @@ func main() {
 	var numberOfBackends int
 	var serverPool loadbalancer.ServerPool
 
-	flag.IntVar(&numberOfBackends, "b", 1, "Set the number of backend servers")
+	flag.IntVar(&numberOfBackends, "b", 3, "Set the number of backend servers")
 	flag.Parse()
 
 	if numberOfBackends < 1 {

@@ -32,10 +32,16 @@ func (s *ServerPool) nextIndex() int {
 	return int(atomic.AddUint64(&s.current, uint64(1)) % uint64(len(s.Backends)))
 }
 
-func (b *Backend) setAlive(alive bool) {
+func (b *Backend) enable() {
 	b.m.Lock()
 	defer b.m.Unlock()
-	b.Alive = alive
+	b.Alive = true
+}
+
+func (b *Backend) disable() {
+	b.m.Lock()
+	defer b.m.Unlock()
+	b.Alive = false
 }
 
 func (b *Backend) isAlive() bool {
