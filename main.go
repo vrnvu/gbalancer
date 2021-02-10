@@ -2,14 +2,14 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sync"
 	"sync/atomic"
-	"time"
+
+	"github.com/vrnvu/gbalancer/server"
 )
 
 // backend is a reverseProxy peer from ORIGIN_URL to URL
@@ -80,8 +80,10 @@ func (s *serverPool) Loadbalance(w http.ResponseWriter, r *http.Request) {
 func main() {
 	var serverPool serverPool
 
-	serverURLs := [1]string{
-		":8080",
+	serverURLs := [3]string{
+		":8081",
+		":8082",
+		":8083",
 	}
 
 	for _, serverURL := range serverURLs {
@@ -101,7 +103,7 @@ func main() {
 		serverPool.AddBackend(&backend)
 
 		// run all backends
-		go runBackend(serverURL)
+		go server.RunBackend(serverURL)
 
 	}
 
@@ -115,15 +117,4 @@ func main() {
 		log.Fatal(err)
 	}
 
-}
-
-// run backend server
-func runBackend(port string) {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello from the proxy backend in port %s! %s", port, time.Now())
-	})
-
-	if err := http.ListenAndServe(port, nil); err != nil {
-		log.Fatal(err)
-	}
 }
