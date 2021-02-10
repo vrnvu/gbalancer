@@ -1,23 +1,40 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 
 	"github.com/vrnvu/gbalancer/loadbalancer"
 	"github.com/vrnvu/gbalancer/server"
 )
 
+func generateServerUrls(numberOfBackends int) []string {
+	initialValue := 8080
+	results := make([]string, 0)
+	for i := 0; i < numberOfBackends; i++ {
+		serverURLPortNumber := initialValue + i
+		serverURLPort := ":" + strconv.Itoa(serverURLPortNumber)
+		results = append(results, serverURLPort)
+	}
+	return results
+}
+
 func main() {
+	var numberOfBackends int
 	var serverPool loadbalancer.ServerPool
 
-	serverURLs := [3]string{
-		":8081",
-		":8082",
-		":8083",
+	flag.IntVar(&numberOfBackends, "b", 1, "Set the number of backend servers")
+	flag.Parse()
+
+	if numberOfBackends < 1 {
+		log.Fatal("Invalid number of backend servers. Run with flag -b N, where N is bigger than 0")
 	}
+
+	serverURLs := generateServerUrls(numberOfBackends)
 
 	for _, serverURL := range serverURLs {
 		u, err := url.Parse("http://localhost" + serverURL)
