@@ -1,6 +1,7 @@
 package loadbalancer
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net"
@@ -126,4 +127,49 @@ func (s *ServerPool) Loadbalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	peer.ReverseProxy.ServeHTTP(w, r)
+}
+
+// ContextKey is the type for context data
+type ContextKey int
+
+const (
+	// ContextRetries number of retries of connections in a backend
+	ContextRetries ContextKey = iota
+)
+
+func getContextRetries(r *http.Request) int {
+	if retry, ok := r.Context().Value(ContextRetries).(int); ok {
+		return retry
+	}
+	return 0
+}
+
+// ProxyErrorHandler is a ErrorHandler alias
+type ProxyErrorHandler = func(w http.ResponseWriter, r *http.Request, e error)
+
+// ProxyErrorHandlerWithRetries keeps track of failed loadbalancers in a backend
+// When a backend exceed the max number of retries it is disabled
+func ProxyErrorHandlerWithRetries(proxy *httputil.ReverseProxy,
+	b *Backend,
+	s *ServerPool,
+	maxRetries int,
+) ProxyErrorHandler {
+	return func(writer http.ResponseWriter, request *http.Request, e error) {
+		log.Printf("[%s] %s\n", b.URL.Host, e.Error())
+		retries := getContextRetries(request)
+		if retries < 3 {
+			select {
+			case <-time.After(10 * time.Millisecond):
+				ctx := context.WithValue(request.Context(), ContextRetries, retries+1)
+				proxy.ServeHTTP(writer, request.WithContext(ctx))
+			}
+			return
+		}
+
+		// if max number of retries is exceed disable this backend
+		b.disable()
+
+		// attempt to load balance to a differnet
+		s.Loadbalance(writer, request.WithContext(request.Context()))
+	}
 }

@@ -52,7 +52,9 @@ func main() {
 
 		serverPool.AddBackend(&backend)
 
-		// run all backends
+		proxy.ErrorHandler = loadbalancer.ProxyErrorHandlerWithRetries(proxy, &backend, &serverPool, 3)
+
+		// run backend
 		go server.RunBackend(serverURL)
 
 	}
